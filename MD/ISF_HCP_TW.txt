@@ -1,0 +1,109 @@
+##################################################################################################################################################################
+####LAMMPS code for calculating the GSF energy curve of
+##Ref.[1] Chen K T , Wei T J , Li G C ,et al.Mechanical properties and deformation mechanisms in CoCrFeMnNi high entropy alloys: A molecular dynamics study[J].
+###Materials Chemistry and Physics, 2021(271-).DOI:10.1016/j.matchemphys.2021.124912.
+##[2] Jarlv A , Ji W , Zhu Z ,et al.Molecular dynamics study on the strengthening mechanisms of Cr–Fe–Co–Ni high-entropy alloys based on the generalized stacking fault energy[J].Journal of Alloys and Compounds, 2022, 905:164137-.DOI:10.1016/j.jallcom.2022.164137.
+###[3] Singh S K , Parashar A .Defect dynamics and uniaxial tensile deformation of equi and non-equi-atomic configuration of multi-elemental alloys[J].
+##Materials Chemistry and Physics, 2021.DOI:10.1016/j.matchemphys.2021.124549.
+##############################################################################################################################################################
+###~/lammps/lammps-29Oct20/src/lmp_serial < ISF_HCP_TW.txt
+clear
+
+variable		lat_cont	equal 3.53 # 
+variable		randomseed equal 12548 #random number
+variable		tem equal 1.0 #Calculated temperature
+
+
+	units		metal  
+	boundary	p p p
+	atom_style	full   # Ref[1]
+	variable	lattice equal  ${lat_cont}
+	variable	partial equal "v_lattice/sqrt(6)"  #Calculated along the [11-2] grain direction,Vector distance is 6 below the root sign
+read_data model.data
+
+
+region up1 block INF INF 62 INF INF INF units box
+group up1 region up1
+region up2 block INF INF 66 INF INF INF units box
+group up2 region up2
+region up3 block INF INF 64 INF INF INF units box
+group up3 region up3
+region energy block INF INF 45 80 INF INF units box
+group energy region energy
+neighbor 2.0 bin
+neigh_modify delay 1 check yes
+
+pair_style      meam/c
+pair_coeff      * *  library.meam Mo Co Ni V Fe Al Cr MoCoNiVFeAlCr.meam Ni Cr Co Mo Fe 
+########################################################################
+thermo          10
+thermo_style    custom step atoms temp etotal pe ke press vol density lx ly lz cpuremain
+########################################################################
+########################################################################
+reset_timestep	0
+velocity        all create ${tem} ${randomseed} dist gaussian
+run             0                             # temperature may not be 300K
+fix             1 all npt temp ${tem} ${tem} 0.01 iso 0.0 0.0 1.0 drag 1.8
+fix             2 all temp/rescale 5 ${tem} ${tem} 0.1 1
+run             1
+unfix           1
+unfix           2
+########################################################################
+reset_timestep	0
+fix             1 all npt temp ${tem} ${tem} 0.01 iso 0.0 0.0 1.0 drag 1.8
+fix             2 all temp/rescale 5 ${tem} ${tem} 0.1 1	
+run             1
+unfix           1
+unfix           2
+########################################################################
+write_data model2.data
+########################################################################	
+reset_timestep	0
+compute pe all pe/atom
+compute gbenergy energy reduce sum c_pe
+variable gbenergy equal c_gbenergy
+thermo 1
+thermo_style custom step temp pe ke etotal lx ly lz pxx pyy pzz c_gbenergy
+dump			1 all custom 1 ISF_HCP_TW.*	id	type	x	y	z
+run 0
+variable gbenergy00 equal "v_gbenergy"
+variable gbenergy0 equal ${gbenergy00}
+
+
+    label			forloopp
+		variable		a loop 50
+		variable		p equal "v_partial/50"
+		variable q equal "v_a/50"
+		displace_atoms	up1 move ${p} 0 0 units box
+		variable		gsf equal "(v_gbenergy-v_gbenergy0)/lx/lz* 16.02*1000"
+		print			"$a ${p} ${q} ${gsf} ${lat_cont}" append	GSF_ISF_HCP_TW.dat
+		run				1
+		next			a
+		jump			ISF_HCP_TW.txt		forloopp
+		
+	label			forloopt
+		variable		a loop 51 100
+		variable		p equal "v_partial/50"
+		variable n equal "v_a-50"
+        variable w equal "v_a/50"
+		displace_atoms	up2 move ${p} 0 0 units box
+		variable		gsf equal "(v_gbenergy-v_gbenergy0)/lx/lz* 16.02*1000"
+		print			"$a ${p} ${w} ${gsf} ${lat_cont}" append	GSF_ISF_HCP_TW.dat
+		run				1
+		next			a
+		jump			ISF_HCP_TW.txt forloopt
+	
+    label			forloopb
+		variable		a loop 101 150
+		variable		p equal "v_partial/50"
+		variable n equal "v_a-50"
+        variable w equal "v_a/50"
+		displace_atoms	up3 move ${p} 0 0 units box
+		variable		gsf equal "(v_gbenergy-v_gbenergy0)/lx/lz* 16.02*1000"
+		print			"$a ${p} ${w} ${gsf} ${lat_cont}" append	GSF_ISF_HCP_TW.dat
+		run				1
+		next			a
+		jump			ISF_HCP_TW.txt forloopb
+
+undump	1
+

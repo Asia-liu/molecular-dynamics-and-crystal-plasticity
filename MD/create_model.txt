@@ -1,0 +1,80 @@
+### LAMMPS code for calculating the GSF energy curve of
+###~/lammps/lammps-29Oct20/src/lmp_serial < create_model.txt
+###
+clear
+
+variable		lat_cont	equal 3.53
+variable		fNi equal 47 #1
+variable 		fCr equal 25 #2
+variable 		fCo equal 2 #3
+variable 		fMo equal 6 #4
+variable 		fFe equal 20 #5
+variable		randomseed equal 2345674
+
+
+
+	units		metal
+	boundary	p p p
+	atom_style	full
+	variable	lattice equal  ${lat_cont}
+	variable	partial equal "v_lattice/sqrt(6)"
+	lattice		fcc ${lattice} orient x 1 1 -2 orient y  1 1 1  orient z 1 -1 0
+	region		box block 0 21 0 20 0 10 units lattice
+	create_box		5 box
+	create_atoms	1 box
+change_box		all		y	final	-50	200	 units box
+	
+set type 1 type/fraction 2 $((v_fCr+v_fCo+v_fMo+v_fFe)/100.0) 1234567  #Ni
+set type 2 type/fraction 3 $((v_fCo+v_fMo+v_fFe)/(v_fCr+v_fCo+v_fMo+v_fFe)) 1234566  #Cr
+set type 3 type/fraction 4 $((v_fMo+v_fFe)/(v_fCo+v_fMo+v_fFe)) 1234565 #Co
+set type 4 type/fraction 5 $((v_fFe)/(v_fMo+v_fFe)) 1234564 #Mo Fe
+
+neighbor 2.0 bin
+neigh_modify delay 1 check yes
+
+pair_style      meam/c
+pair_coeff      * *  library.meam Mo Co Ni V Fe Al Cr MoCoNiVFeAlCr.meam Ni Cr Co Mo Fe 
+
+########################################################################
+thermo          10
+thermo_style    custom step atoms temp etotal pe ke press vol density lx ly lz cpuremain
+########################################################################
+########################################################################
+reset_timestep	0
+velocity        all create 1.0 ${randomseed} dist gaussian
+run             0                             
+fix             1 all npt temp 1.0 1.0 0.01 iso 0.0 0.0 1.0 drag 1.8
+fix             2 all temp/rescale 5 1.0 1.0 0.1 1
+run             1 #
+unfix           1
+unfix           2
+########################################################################
+########################################################################
+reset_timestep	0	
+fix             M1 all atom/swap 1 1 $(v_randomseed+101) 1.0 ke no types 1 2
+fix             M2 all atom/swap 1 1 $(v_randomseed+102) 1.0 ke no types 1 3
+fix             M3 all atom/swap 1 1 $(v_randomseed+103) 1.0 ke no types 1 4
+fix             M4 all atom/swap 1 1 $(v_randomseed+104) 1.0 ke no types 1 5
+fix             M5 all atom/swap 1 1 $(v_randomseed+106) 1.0 ke no types 2 3
+fix             M6 all atom/swap 1 1 $(v_randomseed+107) 1.0 ke no types 2 4 
+fix             M7 all atom/swap 1 1 $(v_randomseed+108) 1.0 ke no types 2 5
+run             50000 # 
+unfix           M1
+unfix           M2
+unfix           M3
+unfix           M4
+unfix           M5
+unfix           M6
+unfix           M7
+########################################################################
+########################################################################
+reset_timestep	0
+fix             1 all npt temp 1.0 1.0 0.01 iso 0.0 0.0 1.0 drag 1.8
+fix             2 all temp/rescale 5 1.0 1.0 0.1 1	
+run             50000 #
+unfix           1
+unfix           2
+########################################################################
+write_data model.data
+########################################################################	
+
