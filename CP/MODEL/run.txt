@@ -1,0 +1,2 @@
+OMP_NUM_THREADS=14
+DAMASK_grid --load tensionX.yaml --geom 2cubic_texture_elongated_grains.vti
